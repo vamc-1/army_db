@@ -27,9 +27,32 @@ with col1:
         rank_4 = st.checkbox("Rank 4")
         subscription_name = st.text_input("Subscription Name")
         charge_amt = st.text_input("Amount")
+
         if st.button("Add Subscription"):
-            rank_applicable = [rank_1, rank_2, rank_3, rank_4]
-            st.text(addto_fixed_charges(rank_applicable, subscription_name, charge_amt))
+            ranks_selected = []
+            if rank_1:
+                ranks_selected.append("RANK_1")
+            if rank_2:
+                ranks_selected.append("RANK_2")
+            if rank_3:
+                ranks_selected.append("RANK_3")
+            if rank_4:
+                ranks_selected.append("RANK_4")
+
+            if not subscription_name or not charge_amt:
+                st.warning("Please enter subscription name and amount.")
+            elif not ranks_selected:
+                st.warning("Please select at least one applicable rank.")
+            else:
+                for rank in ranks_selected:
+                    try:
+                        amt = float(charge_amt)
+                        msg = addto_fixed_charges(rank, subscription_name, amt)
+                        st.success(f"{rank}: {msg}")
+                    except ValueError:
+                        st.error("Amount must be a number.")
+
+
             
     elif st.session_state.mode == "Modify":
         fixed_charges = get_fixed_charges()

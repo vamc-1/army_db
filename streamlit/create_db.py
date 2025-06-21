@@ -97,11 +97,12 @@ def set_database():
 
             # CURRENT_SPLIT table
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS CURRENT_SPLIT (
-                    NAME VARCHAR(100) PRIMARY KEY,
-                    AMOUNT FLOAT NOT NULL
-                )
-            """)
+    CREATE TABLE IF NOT EXISTS CURRENT_SPLIT (
+        UID VARCHAR(50) PRIMARY KEY,
+        NAME VARCHAR(100),
+        AMOUNT FLOAT NOT NULL
+    )
+""")
             print("CURRENT_SPLIT table created")
 
             # MESS_LEDGER table

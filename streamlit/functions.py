@@ -184,20 +184,16 @@ def get_name_uid():
             connection.close()
 
 def get_current_split():
-    """Get the current split configuration"""
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
-        cursor.execute("""
-            SELECT NAME, AMOUNT 
-            FROM CURRENT_SPLIT
-        """)
-        return [list(row.values()) for row in cursor.fetchall()]
+        cursor.execute("SELECT UID, NAME, AMOUNT FROM CURRENT_SPLIT")
+        return [[row['UID'], row['NAME'], row['AMOUNT']] for row in cursor.fetchall()]
     except Error as err:
-        print(f"Error fetching current split: {err}")
+        print(f"Error: {err}")
         return []
     finally:
-        if 'connection' in locals() and connection.open:
+        if connection and connection.open:
             connection.close()
 
 def addto_current_split(officer_id, amount):
@@ -216,10 +212,10 @@ def addto_current_split(officer_id, amount):
         
         # Add to split
         cursor.execute("""
-            INSERT INTO CURRENT_SPLIT (NAME, AMOUNT)
-            VALUES (%s, %s)
+            INSERT INTO CURRENT_SPLIT (UID, NAME, AMOUNT)
+            VALUES (%s, %s, %s)
             ON DUPLICATE KEY UPDATE AMOUNT = %s
-        """, (officer_name, amount, amount))
+        """, (officer_id, officer_name, amount, amount))
         
         connection.commit()
         return f"Added {officer_name} to split with amount {amount}"
@@ -336,11 +332,16 @@ def add_charge(charge_type, uid, description, amount, charge_date, officers_spli
         
         # Convert date to string format (YYYY-MM-DD)
         date_str = charge_date.strftime("%Y-%m-%d") if hasattr(charge_date, 'strftime') else str(charge_date)
-        
+
         if charge_type == "Individual":
-            query = """INSERT INTO TOTAL_CHARGES 
-                      (UID, DESCRIPTION, AMOUNT, TYPE_OF_CHARGE, DATE, REMARKS)
-                      VALUES (%s, %s, %s, %s, %s, NULL)"""
+            if not uid:
+                return "Invalid UID for individual charge"
+            
+            query = """
+                INSERT INTO TOTAL_CHARGES 
+                (UID, DESCRIPTION, AMOUNT, TYPE_OF_CHARGE, DATE, REMARKS)
+                VALUES (%s, %s, %s, %s, %s, NULL)
+            """
             cursor.execute(query, (
                 uid,
                 description,
@@ -348,32 +349,40 @@ def add_charge(charge_type, uid, description, amount, charge_date, officers_spli
                 charge_type,
                 date_str
             ))
-        else:  # Split charge
+        
+        elif charge_type == "Split":
             if not officers_split:
                 return "Please add at least one officer to split"
-                
+            
             total_amount = float(amount)
-            total_share = sum(float(split[1]) for split in officers_split)
+            total_share = sum(float(split[2]) for split in officers_split)
             
             if total_share <= 0:
                 return "Total share must be greater than zero"
+            
+            for officer in officers_split:
+                officer_id = officer[0]
+                share_amount = float(officer[2])
+                individual_amount = total_amount * (share_amount / total_share)
                 
-            for officer_id, share in officers_split:
-                individual_amount = total_amount * float(share) / total_share
-                query = """INSERT INTO TOTAL_CHARGES 
-                          (UID, DESCRIPTION, AMOUNT, TYPE_OF_CHARGE, DATE, REMARKS)
-                          VALUES (%s, %s, %s, %s, %s, NULL)"""
+                query = """
+                    INSERT INTO TOTAL_CHARGES 
+                    (UID, DESCRIPTION, AMOUNT, TYPE_OF_CHARGE, DATE, REMARKS)
+                    VALUES (%s, %s, %s, %s, %s, NULL)
+                """
                 cursor.execute(query, (
                     officer_id,
-                    description,
+                    f"Split: {description}",
                     individual_amount,
                     charge_type,
                     date_str
                 ))
-        
+        else:
+            return "Invalid charge type"
+
         connection.commit()
         return "Charge added successfully"
-        
+
     except Error as err:
         connection.rollback()
         return f"Error adding charge: {err}"
@@ -429,6 +438,38 @@ def modify_fixed_charge(name, rank, amount):
 
         connection.commit()
         return "Fixed charge updated successfully."
+    except Error as err:
+        connection.rollback()
+        return f"Error updating fixed charge: {err}"
+    finally:
+        if 'connection' in locals() and connection.open:
+            connection.close()
+def addto_fixed_charges(rank, name, amount):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # Ensure proper rank column
+        rank_col = rank.upper().replace(" ", "_")
+        if rank_col not in ["RANK_1", "RANK_2", "RANK_3", "RANK_4"]:
+            return "Invalid rank"
+
+        # Check if entry exists
+        cursor.execute("SELECT * FROM FIXED_CHARGES WHERE SUB_NAME = %s", (name,))
+        if cursor.fetchone():
+            # Update if exists
+            cursor.execute(f"UPDATE FIXED_CHARGES SET {rank_col} = %s WHERE SUB_NAME = %s", (amount, name))
+        else:
+            # Insert new entry with all ranks, defaulting others to 0
+            values = {"RANK_1": 0, "RANK_2": 0, "RANK_3": 0, "RANK_4": 0}
+            values[rank_col] = amount
+            cursor.execute("""
+                INSERT INTO FIXED_CHARGES (SUB_NAME, RANK_1, RANK_2, RANK_3, RANK_4)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (name, values["RANK_1"], values["RANK_2"], values["RANK_3"], values["RANK_4"]))
+
+        connection.commit()
+        return "Fixed charge added/updated successfully."
     except Error as err:
         connection.rollback()
         return f"Error updating fixed charge: {err}"
@@ -546,10 +587,11 @@ def initialize_database():
             )
             """,
             """
-            CREATE TABLE IF NOT EXISTS CURRENT_SPLIT (
-                NAME VARCHAR(100) PRIMARY KEY,
-                AMOUNT FLOAT NOT NULL
-            )
+           CREATE TABLE IF NOT EXISTS CURRENT_SPLIT (
+    UID VARCHAR(50) PRIMARY KEY,
+    NAME VARCHAR(100),
+    AMOUNT FLOAT NOT NULL
+)
             """,
             """
             CREATE TABLE IF NOT EXISTS MESS_LEDGER (

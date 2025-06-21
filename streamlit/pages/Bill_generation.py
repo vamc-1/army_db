@@ -1,5 +1,5 @@
 import streamlit as st
-from functions import get_name_uid
+from functions import *
 from pdf import generate_bill
 from datetime import datetime
 from calendar import month_abbr
