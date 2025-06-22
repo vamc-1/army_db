@@ -44,7 +44,7 @@ This project is an end-to-end mess and expense management system designed for an
 
 ### Mess Ledger
 
-<img width="1440" alt="Screenshot" src="https://raw.githubusercontent.com/vamc-1/army_db/main/assets/Screenshot 2025-06-22 05050602.png">
+<img width="1440" alt="Screenshot" src="https://raw.githubusercontent.com/vamc-1/army_db/main/assets/Screenshot 2025-06-22 050602.png">
 
 ### Officer Details
 
